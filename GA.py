@@ -1,8 +1,8 @@
 import random
 import math
 
-SIZE_OF_POPULATION = 8
-MUTATION_LIKELIHOOD = 0.05
+SIZE_OF_POPULATION = 4
+MUTATION_LIKELIHOOD = 0.01
 CROSSOVER_LIKELIHOOD = 0.7
 VALUES_RANGE = [2,31]
 
@@ -53,7 +53,7 @@ class Chromosome:
     def get_fitness(self):
         return self.fitness
     def __str__(self):
-        return str(self.genes) + "- " + str(self.decimal)
+        return str(self.genes)
         
 class Population:
     def set_decimals(self, size):
@@ -81,42 +81,41 @@ class Population:
     def get_chromosomes_decimals(self) : return self.chromosomes_decimals   
 
 class GeneticAlgorithm:
-    '''
-    First, we should select chromosomes that will participate in breeding. They'll be stored in "intermediate list".
-    Selection is performed according to the following rule: 
-        for each chromosome we estimate BREEDING_LIKELIHOOD = приспособленность особи / ср.приспособленность по популяции
-        if whole part from division is n > 0 than we should add chromosome n times to list, and fraction from division
-        says what likelihood it has to appear in list 1 more time(if it's greater than RANDOMVAL, then we add it to list) 
-        it's called REMAINDER STOCHASTIC SAMPLING
-        IT WORKS!
-    '''
+    
     @staticmethod
-    def selection(pop):
-        selection_likelihood = random.random() #to apply adding to interList one more time if succedeed
+    def newFunc(population, points):
         interList = Population(0)
-        breeding = 0
-        breeding_whole = 0
-        breeding_fract = 0.0
-        sumFitn = 0
-        for ch in pop.get_chromosomes() : sumFitn += abs(ch.get_fitness())
-        avgFitn = sumFitn / len(pop.get_chromosomes())
-        #breeding - данное отношение для каждой особи
-        #breeding_whole - целая часть деления
-        #breeding_fract - дробная
-        for ch in pop.get_chromosomes():
-            breeding = abs(ch.get_fitness() / avgFitn) #посчитаем отношение
-            breeding_whole = breeding // 1 #посчитаем его целую часть
-            breeding_fract = breeding - breeding_whole #вычислим дробную 
-            for i in range(int(breeding_whole)):
-                interList.get_chromosomes().append(ch)
-            if (breeding_fract <= selection_likelihood):
-                interList.get_chromosomes().append(ch)
+        sum1 = abs(population.get_chromosomes()[0].get_fitness())
+        i = 0
+        j = 0
+        for p in points:
+            while sum1 < p:
+                j += 1
+                sum1 += abs(population.get_chromosomes()[j].get_fitness())
+                i += 1 # to choose appropriate chromosome by index
+            interList.get_chromosomes().append(population.get_chromosomes()[i])
         return interList
 
     '''
+    SUS means stochastic universal sampling - it's a method of proportionate selection of chromosomes
+    that will participate in recombination and creation of new offsprings. 
+    '''
+    @staticmethod
+    def selectionSUS(pop, N):
+        pointers = []
+        totalFit = 0
+        for ch in pop.get_chromosomes() : totalFit += abs(ch.get_fitness())
+        frameLength = totalFit / N 
+        start = random.randint(0,int(frameLength))
+        for i in range(N): pointers.append(start + i*frameLength)
+        return GeneticAlgorithm.newFunc(pop, pointers)
+
+       
+    '''
     Then using chromosomes from intermediate list, we randomly pick up pairs for breeding. 
     According to crossover_likelihood this pairs can breed. If they are allowed to breed, their children will be
-    added to crossover_pop, else pair itself will be added to crossover_pop
+    added to crossover_pop, else pair itself will be added to crossover_pop.
+    Here the new generation is set. Then 
     '''
     @staticmethod
     def crossover_population(pop):
@@ -156,6 +155,7 @@ class GeneticAlgorithm:
 
     '''
     Here we perform mutation of each chromosome of population according to MUTATION_LIKELIHOOD
+    Each bit of each chromosome mutate according to MUTATION_LIKELIHOOD
     '''
     @staticmethod
     def mutate_chromosome(ch):
@@ -166,6 +166,7 @@ class GeneticAlgorithm:
                 if(ch.get_genes()[i] == 0): ch.get_genes()[i] = 1
                 else: ch.get_genes()[i] = 0
         #should change fitness value of chromosome
+        #because here to process of forming new generation finishes
         ch.set_decimal()
         ch.set_fitness()
 
@@ -177,7 +178,7 @@ class GeneticAlgorithm:
     '''
     @staticmethod
     def evolve(pop):
-        return GeneticAlgorithm.mutate_population(GeneticAlgorithm.crossover_population(GeneticAlgorithm.selection(pop)))
+        return GeneticAlgorithm.mutate_population(GeneticAlgorithm.crossover_population(GeneticAlgorithm.selectionSUS(pop, SIZE_OF_POPULATION)))
 
 def _print_population(pop,gen_number):
     print("\n-----------------------------------------")
@@ -197,6 +198,7 @@ while generation_number < 6:
     _print_population(population,generation_number)
     generation_number += 1
 
+#GeneticAlgorithm.selectionSUS(population, SIZE_OF_POPULATION)
 #print(population.__str__())
 #pop1 = GeneticAlgorithm.selection(population)
 #print(pop1.__str__())
@@ -207,23 +209,25 @@ while generation_number < 6:
 #print(c1.__str__())
 #print(c1.get_decimal())
 
-'''Classical genetic algorithm(Holland)
-Случайно генерируем набор параметров функции(ЦФ) - числа,
-лежащие на промежутке [xmin, xmax].
-Для каждого параметра находим значение ЦФ(его пригодность)
-Помним, что для нашей задачи, чем меньше значение, тем лучше
-1)Начинается этап селекции параметров в промежуточный массив параметров
-годных к размножению. Для каждого параметра высчитываем отношение
-его пригодности к средней пригодности по всей популяции, 
-целое число отношения покажет сколько раз добавить особь в 
-промежуточный массив, в то время как дробная часть покажет
-вероятность следующего попадания в промежуточный массив.
-Генерируется параметр отбора - число [0,1] и если вероятность
-больше этого числа, то особь отбирается в промежуточный массив
-снова. Промежуточный массив сформирован.
-2)Далее выбираются пары для скрещивания. Если выбранная пара
-содержит повторяющиеся хромосомы, то скрещивание не происходит и
-выбирается новая пара, иначе происходит скрещивание и выбранные
-эл-ты удаляются из промежут массива.
-3)  
-'''
+#@staticmethod
+    #def selection(pop):
+        #selection_likelihood = random.random() #to apply adding to interList one more time if succedeed
+        #interList = Population(0)
+        #breeding = 0
+        #breeding_whole = 0
+        #breeding_fract = 0.0
+        #sumFitn = 0
+        #for ch in pop.get_chromosomes() : sumFitn += abs(ch.get_fitness())
+        #avgFitn = sumFitn / len(pop.get_chromosomes())
+        #breeding - данное отношение для каждой особи
+        #breeding_whole - целая часть деления
+        #breeding_fract - дробная
+        #for ch in pop.get_chromosomes():
+        #    breeding = abs(ch.get_fitness() / avgFitn) #посчитаем отношение
+        #    breeding_whole = breeding // 1 #посчитаем его целую часть
+        #    breeding_fract = breeding - breeding_whole #вычислим дробную 
+        #    for i in range(int(breeding_whole)):
+        #        interList.get_chromosomes().append(ch)
+        #    if (breeding_fract <= selection_likelihood):
+        #        interList.get_chromosomes().append(ch)
+        #return interList

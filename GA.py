@@ -1,10 +1,10 @@
 import random
 import math
 
-SIZE_OF_POPULATION = 4
-MUTATION_LIKELIHOOD = 0.01
+SIZE_OF_POPULATION = 8
+MUTATION_LIKELIHOOD = 0.05
 CROSSOVER_LIKELIHOOD = 0.7
-VALUES_RANGE = [2,31]
+VALUES_RANGE = [0,31]
 
 binary_digits_to_represent = int((math.log2(VALUES_RANGE[1])))+1
 #while (binary_digits_to_represent % 4 != 0):
@@ -57,14 +57,14 @@ class Chromosome:
         
 class Population:
     def set_decimals(self, size):
-        return random.sample(range(VALUES_RANGE[0],VALUES_RANGE[1]),size)
+        return random.sample(range(VALUES_RANGE[0],VALUES_RANGE[1]),size) #N
     
     def __init__(self,size):
         self.chromosomes = []
         self.chromosomes_decimals = self.set_decimals(size)
         '0 to size-1'
         for i in range(size): 
-            self.chromosomes.append(Chromosome(self.chromosomes_decimals[i]))
+            self.chromosomes.append(Chromosome(self.chromosomes_decimals[i])) #N
             self.chromosomes[i].set_fitness()
     
     def get_chromosomes(self) : return self.chromosomes
@@ -83,32 +83,32 @@ class Population:
 class GeneticAlgorithm:
     
     @staticmethod
-    def newFunc(population, points):
+    def selectionSUS(population, points):
         interList = Population(0)
         sum1 = abs(population.get_chromosomes()[0].get_fitness())
         i = 0
         j = 0
-        for p in points:
+        for p in points: #points' size is N
             while sum1 < p:
                 j += 1
                 sum1 += abs(population.get_chromosomes()[j].get_fitness())
                 i += 1 # to choose appropriate chromosome by index
-            interList.get_chromosomes().append(population.get_chromosomes()[i])
+            interList.get_chromosomes().append(population.get_chromosomes()[i]) #N
         return interList
 
     '''
     SUS means stochastic universal sampling - it's a method of proportionate selection of chromosomes
-    that will participate in recombination and creation of new offsprings. 
+    that will participate in recombination and creation of new offsprings.
     '''
     @staticmethod
-    def selectionSUS(pop, N):
+    def selectionBuilder(pop, N):
         pointers = []
         totalFit = 0
-        for ch in pop.get_chromosomes() : totalFit += abs(ch.get_fitness())
+        for ch in pop.get_chromosomes() : totalFit += abs(ch.get_fitness()) #N
         frameLength = totalFit / N 
         start = random.randint(0,int(frameLength))
-        for i in range(N): pointers.append(start + i*frameLength)
-        return GeneticAlgorithm.newFunc(pop, pointers)
+        for i in range(N): pointers.append(start + i*frameLength) #N
+        return GeneticAlgorithm.selectionSUS(pop, pointers)
 
        
     '''
@@ -118,15 +118,18 @@ class GeneticAlgorithm:
     Here the new generation is set. Then 
     '''
     @staticmethod
-    def crossover_population(pop):
-        crossover_pop = Population(0) #where store chosen chromosomes
-        while(len(pop.get_chromosomes()) > 1):
-            pair = random.sample(pop.get_chromosomes(),2) #randomly select pair of chromosomes
+    def crossover_population(pop): #pop's size is N
+        crossover_pop = Population(0) 
+        pair = [] 
+        while(len(pop.get_chromosomes()) > 1):#1/2 N, in worst scenario 1/2 N recombinations
+            pair = random.sample(pop.get_chromosomes(),2)
             if (random.random() <= CROSSOVER_LIKELIHOOD):
                 crossover_pop.get_chromosomes().extend(GeneticAlgorithm.crossover_chromosomes(pair[0],pair[1]))
             else:
                 crossover_pop.get_chromosomes().extend(pair)
-            pop.chromosomes = [ch for ch in pop.get_chromosomes() if ch not in pair] # change pop list
+            for ch in pair:
+                pop.get_chromosomes().remove(ch)
+
         return crossover_pop
 
     '''
@@ -138,18 +141,20 @@ class GeneticAlgorithm:
     @staticmethod
     def crossover_chromosomes(chromosome1, chromosome2):
         leng = len(chromosome1.get_genes())
-        idx = random.randint(0,leng) #generate index of crossover point
-        var = 0 #for exchange
-        while idx < leng:
-            var = chromosome1.get_genes()[idx]
+        idx = random.randint(0,leng) + 1
+        temp = 0
+        while idx < leng: #k-1 iterations where k is genes[] length
+            temp = chromosome1.get_genes()[idx]
             chromosome1.get_genes()[idx] = chromosome2.get_genes()[idx]
-            chromosome2.get_genes()[idx] = var
+            chromosome2.get_genes()[idx] = temp
             idx += 1
         return [chromosome1,chromosome2]
    
+
+
     @staticmethod
     def mutate_population(pop):
-        for i in range(len(pop.get_chromosomes())):
+        for i in range(len(pop.get_chromosomes())): #pop's size is N
             GeneticAlgorithm.mutate_chromosome(pop.get_chromosomes()[i])
         return pop
 
@@ -166,7 +171,7 @@ class GeneticAlgorithm:
                 if(ch.get_genes()[i] == 0): ch.get_genes()[i] = 1
                 else: ch.get_genes()[i] = 0
         #should change fitness value of chromosome
-        #because here to process of forming new generation finishes
+        #because here the process of forming new generation finishes
         ch.set_decimal()
         ch.set_fitness()
 
@@ -178,7 +183,11 @@ class GeneticAlgorithm:
     '''
     @staticmethod
     def evolve(pop):
-        return GeneticAlgorithm.mutate_population(GeneticAlgorithm.crossover_population(GeneticAlgorithm.selectionSUS(pop, SIZE_OF_POPULATION)))
+        return GeneticAlgorithm.mutate_population(
+                GeneticAlgorithm.crossover_population(
+                    GeneticAlgorithm.selectionBuilder(pop, SIZE_OF_POPULATION)
+                )
+            )
 
 def _print_population(pop,gen_number):
     print("\n-----------------------------------------")
@@ -189,14 +198,24 @@ def _print_population(pop,gen_number):
         print("Chromosome #", i, " :", ch, "| Fitness: ", ch.get_fitness())
         i += 1
 
-#initialize the population of 8 chromosomes
+'''
+define variable of greatest fitness, so that if chromosome's fitness reaches this value
+algorithm stops and shows how many generations passed to reach fittest chromosome(s)
+'''
+target_value = linear_func(VALUES_RANGE[1])
+
 population = Population(SIZE_OF_POPULATION)
+population.get_chromosomes().sort(key=lambda x: x.get_fitness())
 _print_population(population, gen_number=0)
+
 generation_number = 1
-while generation_number < 6:
+while population.get_chromosomes()[0].get_fitness() != target_value:
     population = GeneticAlgorithm.evolve(population)
+    population.get_chromosomes().sort(key=lambda x: x.get_fitness())
     _print_population(population,generation_number)
     generation_number += 1
+
+#linear difficulty of algorithm o(kN) where k - is genes[] len, N is amount of chromosomes in population
 
 #GeneticAlgorithm.selectionSUS(population, SIZE_OF_POPULATION)
 #print(population.__str__())
